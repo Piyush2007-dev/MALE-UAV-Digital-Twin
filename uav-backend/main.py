@@ -201,7 +201,7 @@ def get_telemetry(altitude: float = 10000, throttle: float = 100.0, fault_mode: 
         rul_hours = 0.0
 
     # Phase 4: Mission Reliability Tier
-    reliability_score = (health_index / 100.0) * (1.0 - ml_anomaly_score * 0.5)
+    reliability_score = health_index / 100.0
     if reliability_score >= 0.95:
         tier = "CONTINUE"
     elif reliability_score >= 0.80:
