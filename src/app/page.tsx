@@ -20,6 +20,7 @@ export default function MilSpecDigitalTwin() {
 
   const [healthIndex, setHealthIndex] = useState<number>(98);
   const [rulHours, setRulHours] = useState<number>(1420);
+  const [missionTier, setMissionTier] = useState<string>("CONTINUE");
   const [kurtosis, setKurtosis] = useState<number>(2.9);
   const [alertState, setAlertState] = useState<{ title: string; desc: string } | null>(null);
 
@@ -40,6 +41,7 @@ export default function MilSpecDigitalTwin() {
 
         setHealthIndex(result.analytics.health_index);
         setRulHours(result.analytics.rul_hours);
+        setMissionTier(result.analytics.mission_tier);
         setKurtosis(result.engine.vibration_kurtosis);
 
         if (result.analytics.is_anomaly) {
@@ -105,8 +107,15 @@ export default function MilSpecDigitalTwin() {
             </Button>
           </div>
         </div>
-        <div className="text-right">
-          <div className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">Mission Reliability</div>
+        <div className="text-right flex flex-col items-end">
+          <div className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-1">Mission Reliability</div>
+          <div className={`px-3 py-1 rounded-sm text-xs font-bold font-mono uppercase tracking-widest mb-1
+            ${missionTier === 'CONTINUE' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/50' : 
+              missionTier === 'DERATE' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/50' : 
+              missionTier === 'DIVERT' ? 'bg-orange-500/20 text-orange-400 border border-orange-500/50' : 
+              'bg-red-500/20 text-red-400 border border-red-500/50'}`}>
+            STATUS: {missionTier}
+          </div>
           <div className={`text-2xl font-mono font-bold ${healthIndex < 60 ? 'text-red-500' : healthIndex < 85 ? 'text-amber-400' : 'text-emerald-500'}`}>
             {healthIndex.toFixed(2)}% | RUL: {rulHours}H
           </div>

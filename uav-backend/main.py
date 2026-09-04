@@ -125,6 +125,17 @@ def get_telemetry(altitude: float = 10000, throttle: float = 100.0, fault_mode: 
     except ValueError:
         rul_hours = 0.0
 
+    # Phase 4: Mission Reliability Tier
+    reliability_score = (health_index / 100.0) * (1.0 - ml_anomaly_score * 0.5)
+    if reliability_score >= 0.95:
+        tier = "CONTINUE"
+    elif reliability_score >= 0.80:
+        tier = "DERATE"
+    elif reliability_score >= 0.60:
+        tier = "DIVERT"
+    else:
+        tier = "RTB"
+
     return {
         "timestamp": time.strftime("%H:%M:%S"),
         "environment": {
@@ -151,6 +162,7 @@ def get_telemetry(altitude: float = 10000, throttle: float = 100.0, fault_mode: 
             "anomaly_reason": ml_anomaly_reason,
             "is_anomaly": is_anomaly,
             "health_index": round(health_index),
-            "rul_hours": round(rul_hours)
+            "rul_hours": round(rul_hours),
+            "mission_tier": tier
         }
     }
