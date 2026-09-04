@@ -26,6 +26,15 @@ export default function MilSpecDigitalTwin() {
   const [suggestedAction, setSuggestedAction] = useState<string | null>(null);
   const [confidenceStatus, setConfidenceStatus] = useState<string>("HIGH CONFIDENCE (In Envelope)");
   
+  const [activeTab, setActiveTab] = useState<"live" | "planner">("live");
+  
+  const [plannerAlt, setPlannerAlt] = useState(15000);
+  const [plannerDur, setPlannerDur] = useState(5);
+  const [plannerThrottle, setPlannerThrottle] = useState("cruise");
+  const [plannerLoading, setPlannerLoading] = useState(false);
+  const [plannerResult, setPlannerResult] = useState<any>(null);
+  const [plannerError, setPlannerError] = useState<string | null>(null);
+  
   const [latestTelemetry, setLatestTelemetry] = useState<any>(null);
   const [copilotQuery, setCopilotQuery] = useState("");
   const [copilotResponse, setCopilotResponse] = useState<string | null>(null);
@@ -64,6 +73,26 @@ export default function MilSpecDigitalTwin() {
       setCopilotError("FAILED TO REACH COPILOT. RETRY.");
     } finally {
       setCopilotLoading(false);
+    }
+  };
+
+  const handleRunPlanner = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPlannerLoading(true);
+    setPlannerError(null);
+    try {
+      const res = await fetch("http://localhost:8000/api/planner", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ altitude: plannerAlt, duration_hours: plannerDur, throttle_pattern: plannerThrottle })
+      });
+      if (!res.ok) throw new Error("API failed");
+      const json = await res.json();
+      setPlannerResult(json);
+    } catch(err) {
+      setPlannerError("FAILED TO RUN PLANNER. RETRY.");
+    } finally {
+      setPlannerLoading(false);
     }
   };
 
@@ -137,11 +166,15 @@ export default function MilSpecDigitalTwin() {
       <header className="mb-4 flex justify-between items-end">
         <div>
           <h1 className="text-xl font-bold tracking-widest text-zinc-100 uppercase">MALE UAV Propulsion Digital Twin</h1>
-          <div className="flex items-center gap-4 mt-1">
+          <div className="flex items-center gap-4 mt-1 mb-2">
             <p className="text-xs font-mono text-zinc-500">PROGNOSTICS & HEALTH MANAGEMENT (PHM) SUBSYSTEM</p>
             <Button variant="outline" onClick={handleReset} className="text-[10px] font-mono h-6 px-2 rounded-sm bg-zinc-900 border-zinc-700 hover:bg-zinc-800 hover:text-white uppercase tracking-widest text-zinc-400">
               RESET SIMULATION
             </Button>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setActiveTab("live")} className={`text-[10px] font-mono h-7 px-3 rounded-sm border-zinc-800 ${activeTab === 'live' ? 'bg-zinc-800 text-white' : 'bg-black text-zinc-500'}`}>LIVE OPS</Button>
+            <Button variant="outline" onClick={() => setActiveTab("planner")} className={`text-[10px] font-mono h-7 px-3 rounded-sm border-zinc-800 ${activeTab === 'planner' ? 'bg-zinc-800 text-white' : 'bg-black text-zinc-500'}`}>MISSION PLANNER</Button>
           </div>
         </div>
         <div className="text-right flex flex-col items-end">
@@ -159,7 +192,8 @@ export default function MilSpecDigitalTwin() {
         </div>
       </header>
 
-      <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
+      {activeTab === "live" ? (
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 mt-4">
 
         {/* Left Column: Command & Raw Data */}
         <div className="xl:col-span-3 space-y-4">
@@ -328,6 +362,56 @@ export default function MilSpecDigitalTwin() {
           </div>
         </div>
       </div>
+      ) : (
+        <div className="mt-4 max-w-2xl">
+          <Card className="bg-zinc-950 border-zinc-800 rounded-sm">
+            <CardHeader className="p-3 border-b border-zinc-900">
+              <CardTitle className="text-xs font-mono text-zinc-400 uppercase tracking-widest">PRE-MISSION &quot;WHAT-IF&quot; PLANNER</CardTitle>
+            </CardHeader>
+            <CardContent className="p-4 space-y-4 font-mono">
+              <p className="text-xs text-zinc-500 mb-4">Run the digital twin&apos;s degradation model forward to simulate the health impact of a proposed mission profile.</p>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[10px] text-zinc-500 mb-1 block">TARGET ALTITUDE (FT)</label>
+                  <input type="number" value={plannerAlt} onChange={e => setPlannerAlt(Number(e.target.value))} className="w-full bg-zinc-900 border border-zinc-800 p-2 text-xs text-zinc-300 rounded-sm focus:outline-none" />
+                </div>
+                <div>
+                  <label className="text-[10px] text-zinc-500 mb-1 block">EXPECTED DURATION (HRS)</label>
+                  <input type="number" value={plannerDur} onChange={e => setPlannerDur(Number(e.target.value))} className="w-full bg-zinc-900 border border-zinc-800 p-2 text-xs text-zinc-300 rounded-sm focus:outline-none" />
+                </div>
+              </div>
+              
+              <div>
+                <label className="text-[10px] text-zinc-500 mb-1 block">THROTTLE PATTERN</label>
+                <div className="flex gap-2">
+                  <Button variant="outline" onClick={() => setPlannerThrottle("cruise")} className={`flex-1 h-8 text-[10px] rounded-sm border-zinc-800 ${plannerThrottle === 'cruise' ? 'bg-zinc-800 text-white' : 'bg-zinc-900 text-zinc-500'}`}>CRUISE (NORMAL)</Button>
+                  <Button variant="outline" onClick={() => setPlannerThrottle("aggressive")} className={`flex-1 h-8 text-[10px] rounded-sm border-zinc-800 ${plannerThrottle === 'aggressive' ? 'bg-zinc-800 text-white' : 'bg-zinc-900 text-zinc-500'}`}>AGGRESSIVE (HIGH LOAD)</Button>
+                </div>
+              </div>
+
+              <Button onClick={handleRunPlanner} disabled={plannerLoading} className="w-full h-8 text-xs bg-zinc-800 text-white rounded-sm hover:bg-zinc-700">
+                {plannerLoading ? "SIMULATING..." : "RUN SIMULATION"}
+              </Button>
+              
+              {plannerError && <div className="text-xs text-red-500 mt-2">{plannerError}</div>}
+              
+              {plannerResult && (
+                <div className={`mt-4 p-4 rounded-sm border ${plannerResult.is_safe ? 'bg-emerald-950/20 border-emerald-900/50' : 'bg-red-950/20 border-red-900/50'}`}>
+                  <div className={`text-sm font-bold mb-2 ${plannerResult.is_safe ? 'text-emerald-500' : 'text-red-500'}`}>
+                    {plannerResult.is_safe ? 'MISSION PROFILE: SAFE' : 'MISSION PROFILE: UNSAFE'}
+                  </div>
+                  <div className="text-xs text-zinc-400 mb-2">{plannerResult.message}</div>
+                  <div className="flex justify-between text-[10px] text-zinc-500">
+                    <span>EST FINAL HEALTH: <span className="text-zinc-300">{plannerResult.final_health_index}%</span></span>
+                    <span>EST REMAINING RUL: <span className="text-zinc-300">{plannerResult.final_rul_hours}H</span></span>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }

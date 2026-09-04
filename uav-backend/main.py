@@ -75,6 +75,40 @@ def ask_copilot(req: CopilotRequest):
         
     return {"answer": answer}
 
+class PlannerRequest(BaseModel):
+    altitude: float
+    duration_hours: float
+    throttle_pattern: str
+
+@app.post("/api/planner")
+def run_planner(req: PlannerRequest):
+    sim_wear_rate = 1.5 if req.throttle_pattern == "aggressive" else 1.0
+    
+    current_wear = state.accumulated_wear_time
+    theta_1 = 0.01
+    theta_2 = 0.001
+    
+    final_wear = current_wear + (sim_wear_rate * req.duration_hours)
+    
+    final_hi_val = 1.0 - (theta_1 * math.exp(theta_2 * final_wear))
+    final_health_index = max(0.0, final_hi_val * 100.0)
+    
+    try:
+        t_end = math.log(1.0 / theta_1) / theta_2
+        rul_effective = max(0.0, t_end - final_wear)
+        final_rul_hours = rul_effective / sim_wear_rate
+    except ValueError:
+        final_rul_hours = 0.0
+        
+    is_safe = final_health_index >= 60.0  # Above RTB threshold
+    
+    return {
+        "is_safe": is_safe,
+        "final_health_index": round(final_health_index, 2),
+        "final_rul_hours": round(final_rul_hours, 1),
+        "message": f"Mission {'is SAFE' if is_safe else 'is UNSAFE'}. Expected final health index: {round(final_health_index, 1)}%."
+    }
+
 # Statistical history for Z-Score Anomaly Detection
 history_egt = []
 
