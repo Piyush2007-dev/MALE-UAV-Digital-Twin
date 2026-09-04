@@ -15,6 +15,7 @@ export default function MilSpecDigitalTwin() {
 
   const [faultMode, setFaultMode] = useState<"normal" | "misfire" | "cooling" | "bearing">("normal");
   const [altitude, setAltitude] = useState<number>(10000);
+  const [throttle, setThrottle] = useState<number>(100);
   const [ambientTemp, setAmbientTemp] = useState<number>(25);
 
   const [healthIndex, setHealthIndex] = useState<number>(98);
@@ -25,7 +26,7 @@ export default function MilSpecDigitalTwin() {
   useEffect(() => {
     const fetchTelemetry = async () => {
       try {
-        const response = await fetch(`http://localhost:8000/api/telemetry?altitude=${altitude}&fault_mode=${faultMode}`);
+        const response = await fetch(`http://localhost:8000/api/telemetry?altitude=${altitude}&throttle=${throttle}&fault_mode=${faultMode}`);
         const result = await response.json();
 
         setHealthIndex(result.analytics.health_index);
@@ -45,8 +46,10 @@ export default function MilSpecDigitalTwin() {
           {
             time: result.timestamp,
             rpm: result.engine.rpm,
+            expected_rpm: result.expected?.rpm,
             egt1: result.engine.egt[0], egt2: result.engine.egt[1],
             egt3: result.engine.egt[2], egt4: result.engine.egt[3],
+            expected_egt: result.expected?.egt,
           }
         ]);
 
@@ -68,7 +71,7 @@ export default function MilSpecDigitalTwin() {
 
     const interval = setInterval(fetchTelemetry, 1000);
     return () => clearInterval(interval);
-  }, [faultMode, altitude]);
+  }, [faultMode, altitude, throttle]);
 
   return (
     <div className="min-h-screen bg-black text-zinc-300 p-4 font-sans selection:bg-amber-500/30">
@@ -129,6 +132,13 @@ export default function MilSpecDigitalTwin() {
                 </div>
                 <input type="range" min="0" max="30000" step="500" value={altitude} onChange={(e) => setAltitude(Number(e.target.value))} className="w-full accent-zinc-500 bg-zinc-900 h-1 cursor-crosshair" />
               </div>
+              <div>
+                <div className="flex justify-between mb-1 text-zinc-500">
+                  <span>THROTTLE (%)</span>
+                  <span className="text-zinc-300">{throttle}</span>
+                </div>
+                <input type="range" min="0" max="100" step="1" value={throttle} onChange={(e) => setThrottle(Number(e.target.value))} className="w-full accent-zinc-500 bg-zinc-900 h-1 cursor-crosshair" />
+              </div>
             </CardContent>
           </Card>
 
@@ -166,6 +176,7 @@ export default function MilSpecDigitalTwin() {
                   <XAxis dataKey="time" stroke="#52525b" fontSize={9} fontFamily="monospace" tickMargin={8} />
                   <YAxis domain={[750, 980]} stroke="#52525b" fontSize={9} fontFamily="monospace" width={30} />
                   <Tooltip contentStyle={{ backgroundColor: "#09090b", border: "1px solid #27272a", fontFamily: "monospace", fontSize: "10px" }} />
+                  <Line type="monotone" dataKey="expected_egt" name="EXPECTED" stroke="#a1a1aa" strokeWidth={1.5} strokeDasharray="4 4" dot={false} isAnimationActive={false} />
                   <Line type="monotone" dataKey="egt1" name="CYL 1" stroke="#f59e0b" strokeWidth={1.5} dot={false} isAnimationActive={false} />
                   <Line type="monotone" dataKey="egt2" name="CYL 2" stroke="#52525b" strokeWidth={1} dot={false} isAnimationActive={false} />
                   <Line type="monotone" dataKey="egt3" name="CYL 3" stroke="#52525b" strokeWidth={1} dot={false} isAnimationActive={false} />
@@ -185,6 +196,7 @@ export default function MilSpecDigitalTwin() {
                   <LineChart data={data}>
                     <CartesianGrid strokeDasharray="2 4" stroke="#27272a" vertical={false} />
                     <YAxis domain={[4000, 5200]} stroke="#52525b" fontSize={9} fontFamily="monospace" width={35} />
+                    <Line type="step" dataKey="expected_rpm" name="EXPECTED" stroke="#a1a1aa" strokeWidth={1.5} strokeDasharray="4 4" dot={false} isAnimationActive={false} />
                     <Line type="step" dataKey="rpm" name="RPM" stroke="#3b82f6" strokeWidth={1.5} dot={false} isAnimationActive={false} />
                   </LineChart>
                 </ResponsiveContainer>
