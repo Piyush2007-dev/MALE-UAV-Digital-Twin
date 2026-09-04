@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from "recharts";
@@ -40,6 +40,10 @@ export default function MilSpecDigitalTwin() {
   const [copilotResponse, setCopilotResponse] = useState<string | null>(null);
   const [copilotLoading, setCopilotLoading] = useState(false);
   const [copilotError, setCopilotError] = useState<string | null>(null);
+
+  const [ticket, setTicket] = useState<{ id: string; component: string; action: string } | null>(null);
+  const activeFaultEpisodeRef = useRef<string | null>(null);
+  const lastTierRef = useRef<string>("CONTINUE");
 
   const handleReset = async () => {
     try {
@@ -109,6 +113,30 @@ export default function MilSpecDigitalTwin() {
         setKurtosis(result.engine.vibration_kurtosis);
         setSuggestedAction(result.analytics.suggested_action || null);
         setConfidenceStatus(result.environment.confidence_status || "HIGH CONFIDENCE (In Envelope)");
+
+        // Phase 9: Speech Synthesis on Tier Transition
+        const currentTier = result.analytics.mission_tier;
+        if (currentTier !== lastTierRef.current) {
+          if (currentTier === "DIVERT" || currentTier === "RTB") {
+            const msg = new SpeechSynthesisUtterance(`Warning. Engine health critical. Recommend ${currentTier}. ${result.analytics.anomaly_reason || ""}`);
+            window.speechSynthesis.speak(msg);
+          }
+          lastTierRef.current = currentTier;
+        }
+
+        // Phase 9: Auto-Generated Maintenance Ticket
+        if (result.analytics.rul_hours < 200) { // arbitrary threshold for demo
+          if (activeFaultEpisodeRef.current !== faultMode && faultMode !== "normal") {
+             setTicket({
+               id: `TCK-${Math.floor(Math.random() * 10000)}`,
+               component: faultMode.toUpperCase(),
+               action: `Inspect and repair ${faultMode} subsystem immediately.`
+             });
+             activeFaultEpisodeRef.current = faultMode;
+          }
+        } else if (faultMode === "normal") {
+          activeFaultEpisodeRef.current = null;
+        }
 
         if (result.analytics.is_anomaly) {
           if (result.analytics.ml_anomaly_score > 0.5) {
@@ -295,10 +323,26 @@ export default function MilSpecDigitalTwin() {
           )}
 
           {suggestedAction && (
-            <Alert className="bg-orange-950/20 border-orange-900/50 rounded-sm p-3">
+            <Alert className="bg-orange-950/20 border-orange-900/50 rounded-sm p-3 mt-4">
               <AlertTitle className="text-xs font-mono font-bold text-orange-500 uppercase tracking-widest">REROUTE ADVISORY</AlertTitle>
               <AlertDescription className="text-[10px] font-mono text-orange-400/80 mt-1">{suggestedAction}</AlertDescription>
             </Alert>
+          )}
+
+          {ticket && (
+            <Card className="bg-zinc-950 border-red-900/50 rounded-sm mt-4">
+              <CardHeader className="p-3 border-b border-red-900/50 bg-red-950/20">
+                <CardTitle className="text-[10px] font-mono text-red-500 uppercase tracking-widest flex justify-between">
+                  <span>MAINTENANCE TICKET</span>
+                  <span>{ticket.id}</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-3 text-xs font-mono">
+                <div className="text-zinc-500 mb-1">COMPONENT: <span className="text-red-400">{ticket.component}</span></div>
+                <div className="text-zinc-500">ACTION: <span className="text-zinc-300">{ticket.action}</span></div>
+                <Button onClick={() => setTicket(null)} className="w-full mt-3 h-6 text-[10px] bg-red-950/50 text-red-500 border border-red-900/50 hover:bg-red-900 hover:text-red-300 rounded-sm">ACKNOWLEDGE & CLEAR</Button>
+              </CardContent>
+            </Card>
           )}
         </div>
 
