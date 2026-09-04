@@ -4,6 +4,8 @@ from fastapi.middleware.cors import CORSMiddleware
 import math
 import random
 import time
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from physics_model import calculate_isa, calculate_expected
 from ml_model import detector
 
@@ -15,6 +17,22 @@ app.add_middleware(
     allow_origins=["*"],
     allow_methods=["*"],
 )
+
+class DigitalTwinState:
+    def __init__(self):
+        self.operating_hours = 0.0
+        self.accumulated_wear_time = 0.0
+        
+    def reset(self):
+        self.operating_hours = 0.0
+        self.accumulated_wear_time = 0.0
+
+state = DigitalTwinState()
+
+@app.post("/api/reset")
+def reset_simulation():
+    state.reset()
+    return {"status": "reset_successful"}
 
 # Statistical history for Z-Score Anomaly Detection
 history_egt = []
@@ -78,10 +96,34 @@ def get_telemetry(altitude: float = 10000, throttle: float = 100.0, fault_mode: 
     # Trigger anomaly if either model flags it
     is_anomaly = (ml_anomaly_score > 0.5) or (z_score_val > 3.0)
 
-    # Calculate basic Health Index based on parameters
-    health_index = 99
-    if fault_mode != "normal":
-        health_index -= random.uniform(20, 45)
+    # 5. Real RUL Estimation (Exponential Wear Trajectory)
+    state.operating_hours += 1.0 # Simulate 1 hour per tick
+    
+    wear_rate = {
+        "normal": 1.0,
+        "misfire": 15.0,
+        "cooling": 10.0,
+        "bearing": 25.0
+    }.get(fault_mode, 1.0)
+    
+    state.accumulated_wear_time += wear_rate
+    
+    theta_1 = 0.01
+    theta_2 = 0.001
+    
+    # HI(t) = 1 - θ1 * exp(θ2 * t)
+    t = state.accumulated_wear_time
+    hi_val = 1.0 - (theta_1 * math.exp(theta_2 * t))
+    hi_val = max(0.0, hi_val)
+    health_index = hi_val * 100.0
+    
+    # RUL Calculation from fitted trajectory
+    try:
+        t_end = math.log(1.0 / theta_1) / theta_2
+        rul_effective_time_remaining = max(0.0, t_end - t)
+        rul_hours = rul_effective_time_remaining / wear_rate
+    except ValueError:
+        rul_hours = 0.0
 
     return {
         "timestamp": time.strftime("%H:%M:%S"),
@@ -108,6 +150,7 @@ def get_telemetry(altitude: float = 10000, throttle: float = 100.0, fault_mode: 
             "ml_anomaly_score": round(ml_anomaly_score, 3),
             "anomaly_reason": ml_anomaly_reason,
             "is_anomaly": is_anomaly,
-            "health_index": round(health_index)
+            "health_index": round(health_index),
+            "rul_hours": round(rul_hours)
         }
     }

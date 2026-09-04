@@ -23,6 +23,15 @@ export default function MilSpecDigitalTwin() {
   const [kurtosis, setKurtosis] = useState<number>(2.9);
   const [alertState, setAlertState] = useState<{ title: string; desc: string } | null>(null);
 
+  const handleReset = async () => {
+    try {
+      await fetch("http://localhost:8000/api/reset", { method: "POST" });
+      setRawLogs(prev => [...prev.slice(-6), `[SYS INFO] DIGITAL TWIN SIMULATION RESET ACKNOWLEDGED.`]);
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
   useEffect(() => {
     const fetchTelemetry = async () => {
       try {
@@ -30,7 +39,7 @@ export default function MilSpecDigitalTwin() {
         const result = await response.json();
 
         setHealthIndex(result.analytics.health_index);
-        setRulHours(Math.round(result.analytics.health_index * 14.5));
+        setRulHours(result.analytics.rul_hours);
         setKurtosis(result.engine.vibration_kurtosis);
 
         if (result.analytics.is_anomaly) {
@@ -89,12 +98,17 @@ export default function MilSpecDigitalTwin() {
       <header className="mb-4 flex justify-between items-end">
         <div>
           <h1 className="text-xl font-bold tracking-widest text-zinc-100 uppercase">MALE UAV Propulsion Digital Twin</h1>
-          <p className="text-xs font-mono text-zinc-500">PROGNOSTICS & HEALTH MANAGEMENT (PHM) SUBSYSTEM</p>
+          <div className="flex items-center gap-4 mt-1">
+            <p className="text-xs font-mono text-zinc-500">PROGNOSTICS & HEALTH MANAGEMENT (PHM) SUBSYSTEM</p>
+            <Button variant="outline" onClick={handleReset} className="text-[10px] font-mono h-6 px-2 rounded-sm bg-zinc-900 border-zinc-700 hover:bg-zinc-800 hover:text-white uppercase tracking-widest text-zinc-400">
+              RESET SIMULATION
+            </Button>
+          </div>
         </div>
         <div className="text-right">
           <div className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">Mission Reliability</div>
           <div className={`text-2xl font-mono font-bold ${healthIndex < 60 ? 'text-red-500' : healthIndex < 85 ? 'text-amber-400' : 'text-emerald-500'}`}>
-            {healthIndex}.00%
+            {healthIndex.toFixed(2)}% | RUL: {rulHours}H
           </div>
         </div>
       </header>
