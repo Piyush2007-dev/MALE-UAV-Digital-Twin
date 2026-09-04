@@ -202,7 +202,7 @@ export default function MilSpecDigitalTwin() {
       <div className="flex justify-between text-[10px] font-mono text-zinc-500 border-b border-zinc-800 pb-2 mb-4 uppercase tracking-widest">
         <span>Link: SECURE UHF | Latency: 14ms | Freq: 2.4GHz</span>
         <span className="text-amber-500/70">ASSET: DRDO-TAPAS-04 | ENG: AUSTRO AE330 (180HP)</span>
-        <span>SYS TIME: {new Date().toISOString()}</span>
+        <span suppressHydrationWarning>SYS TIME: {new Date().toISOString()}</span>
       </div>
 
       <header className="mb-4 flex justify-between items-end">
