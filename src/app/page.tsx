@@ -33,8 +33,12 @@ export default function MilSpecDigitalTwin() {
         setRulHours(Math.round(result.analytics.health_index * 14.5));
         setKurtosis(result.engine.vibration_kurtosis);
 
-        if (result.analytics.is_anomaly && faultMode === "misfire") {
-          setAlertState({ title: "SYS WARN: Z-SCORE ANOMALY", desc: `EGT Variance > 3σ. Z-Score: ${result.analytics.z_score}` });
+        if (result.analytics.is_anomaly) {
+          if (result.analytics.ml_anomaly_score > 0.5) {
+            setAlertState({ title: "SYS WARN: ML ANOMALY DETECTED", desc: `Confidence: ${(result.analytics.ml_anomaly_score * 100).toFixed(1)}%. ${result.analytics.anomaly_reason}` });
+          } else if (result.analytics.z_score > 3.0) {
+            setAlertState({ title: "SYS WARN: Z-SCORE ANOMALY", desc: `EGT Variance > 3σ. Z-Score: ${result.analytics.z_score}` });
+          }
         } else if (result.engine.cht[0] > 120 && faultMode === "cooling") {
           setAlertState({ title: "SYS CRIT: THERMAL LIMIT", desc: "CHT baseline exceeded across all 4 cylinders." });
         } else if (faultMode === "normal") {
