@@ -24,6 +24,7 @@ export default function MilSpecDigitalTwin() {
   const [kurtosis, setKurtosis] = useState<number>(2.9);
   const [alertState, setAlertState] = useState<{ title: string; desc: string } | null>(null);
   const [suggestedAction, setSuggestedAction] = useState<string | null>(null);
+  const [confidenceStatus, setConfidenceStatus] = useState<string>("HIGH CONFIDENCE (In Envelope)");
   
   const [latestTelemetry, setLatestTelemetry] = useState<any>(null);
   const [copilotQuery, setCopilotQuery] = useState("");
@@ -78,6 +79,7 @@ export default function MilSpecDigitalTwin() {
         setMissionTier(result.analytics.mission_tier);
         setKurtosis(result.engine.vibration_kurtosis);
         setSuggestedAction(result.analytics.suggested_action || null);
+        setConfidenceStatus(result.environment.confidence_status || "HIGH CONFIDENCE (In Envelope)");
 
         if (result.analytics.is_anomaly) {
           if (result.analytics.ml_anomaly_score > 0.5) {
@@ -200,6 +202,13 @@ export default function MilSpecDigitalTwin() {
                   <span className="text-zinc-300">{throttle}</span>
                 </div>
                 <input type="range" min="0" max="100" step="1" value={throttle} onChange={(e) => setThrottle(Number(e.target.value))} className="w-full accent-zinc-500 bg-zinc-900 h-1 cursor-crosshair" />
+              </div>
+              
+              <div className="mt-4 border-t border-zinc-900 pt-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-[10px] font-mono text-zinc-500">ML MODEL CONFIDENCE</span>
+                  <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded-sm ${confidenceStatus.includes('HIGH') ? 'bg-emerald-500/20 text-emerald-500' : 'bg-orange-500/20 text-orange-500'}`}>{confidenceStatus}</span>
+                </div>
               </div>
             </CardContent>
           </Card>

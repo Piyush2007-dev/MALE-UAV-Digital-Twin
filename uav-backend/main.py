@@ -195,7 +195,8 @@ def get_telemetry(altitude: float = 10000, throttle: float = 100.0, fault_mode: 
             "altitude_ft": altitude,
             "throttle_pct": throttle,
             "ambient_temp_c": round(t_amb_c, 1),
-            "air_density_ratio": round(density_ratio, 3)
+            "air_density_ratio": round(density_ratio, 3),
+            "confidence_status": detector.check_confidence(altitude, throttle)
         },
         "engine": {
             "rpm": round(rpm),

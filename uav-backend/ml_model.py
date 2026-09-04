@@ -74,5 +74,13 @@ class AnomalyDetector:
             
         return float(anomaly_score), reason
 
+    def check_confidence(self, altitude: float, throttle: float) -> str:
+        """
+        Checks if the current operating conditions fall within the training envelope.
+        """
+        if 0.0 <= altitude <= 20000.0 and 40.0 <= throttle <= 100.0:
+            return "HIGH CONFIDENCE (In Envelope)"
+        return "EXTRAPOLATED (Out of Envelope)"
+
 # Instantiate the singleton so it trains on startup
 detector = AnomalyDetector()
