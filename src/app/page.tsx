@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import {
-  LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
+  LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -377,6 +377,7 @@ export default function MilSpecDigitalTwin() {
                   <XAxis dataKey="time" stroke="#52525b" fontSize={9} fontFamily="monospace" tickMargin={8} />
                   <YAxis domain={[750, 980]} stroke="#52525b" fontSize={9} fontFamily="monospace" width={30} />
                   <Tooltip contentStyle={{ backgroundColor: "#09090b", border: "1px solid #27272a", fontFamily: "monospace", fontSize: "10px" }} />
+                  <Legend wrapperStyle={{ fontSize: '10px', fontFamily: 'monospace', paddingTop: '10px' }} />
                   <Line type="monotone" dataKey="expected_egt" name="EXPECTED" stroke="#a1a1aa" strokeWidth={1.5} strokeDasharray="4 4" dot={false} isAnimationActive={false} />
                   <Line type="monotone" dataKey="egt1" name="CYL 1" stroke="#f59e0b" strokeWidth={1.5} dot={false} isAnimationActive={false} />
                   <Line type="monotone" dataKey="egt2" name="CYL 2" stroke="#52525b" strokeWidth={1} dot={false} isAnimationActive={false} />
