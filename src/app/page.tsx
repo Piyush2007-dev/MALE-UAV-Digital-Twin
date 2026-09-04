@@ -8,6 +8,20 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
+const formatRUL = (hours: number) => {
+  if (hours <= 0 || isNaN(hours)) return "0m";
+  if (hours < 48) {
+    const h = Math.floor(hours);
+    const m = Math.floor((hours - h) * 60);
+    const hStr = h > 0 ? `${h}h` : '';
+    const mStr = m > 0 ? `${m}m` : '';
+    return [hStr, mStr].filter(Boolean).join(' ') || "0m";
+  } else {
+    const days = Math.round(hours / 24);
+    return `~${days} day${days === 1 ? '' : 's'}`;
+  }
+};
+
 export default function MilSpecDigitalTwin() {
   const [data, setData] = useState<any[]>([]);
   const [vibrationData, setVibrationData] = useState<any[]>([]);
@@ -216,6 +230,9 @@ export default function MilSpecDigitalTwin() {
           </div>
           <div className={`text-2xl font-mono font-bold ${healthIndex < 60 ? 'text-red-500' : healthIndex < 85 ? 'text-amber-400' : 'text-emerald-500'}`}>
             {healthIndex.toFixed(2)}% | RUL: {rulHours}H
+          </div>
+          <div className="text-[10px] font-mono text-zinc-400 mt-1 uppercase tracking-widest bg-zinc-900/50 px-2 py-1 rounded-sm border border-zinc-800">
+            Est. Safe Flight Time Remaining: <span className="text-zinc-200 font-bold">{formatRUL(rulHours)}</span>
           </div>
         </div>
       </header>
