@@ -6,6 +6,7 @@ import random
 import time
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 from physics_model import calculate_isa, calculate_expected
 from ml_model import detector
 
@@ -33,6 +34,46 @@ state = DigitalTwinState()
 def reset_simulation():
     state.reset()
     return {"status": "reset_successful"}
+
+class CopilotRequest(BaseModel):
+    query: str
+    context: dict
+    fault_mode: str
+
+@app.post("/api/copilot")
+def ask_copilot(req: CopilotRequest):
+    query = req.query.lower()
+    ctx = req.context
+    fault = req.fault_mode
+    
+    tier = ctx.get("analytics", {}).get("mission_tier", "UNKNOWN")
+    cht = ctx.get("engine", {}).get("cht", [0])[0]
+    egt = ctx.get("engine", {}).get("egt", [0])[0]
+    rpm = ctx.get("engine", {}).get("rpm", 0)
+    
+    answer = "I'm monitoring the digital twin. What would you like to know?"
+    
+    if "why" in query and ("divert" in query or "rtb" in query or "recommend" in query):
+        if tier in ["DIVERT", "RTB"]:
+            if fault == "misfire":
+                answer = f"I recommended {tier} because I detected a severe misfire anomaly. Cylinder 1 EGT is currently {egt}°C (expected ~850°C) and RPM has dropped to {rpm}. This indicates a critical loss of combustion."
+            elif fault == "cooling":
+                answer = f"I recommended {tier} due to thermal degradation. The baseline CHT has spiked to {cht}°C, which exceeds the safe operating threshold. Continued operation risks engine seizure."
+            elif fault == "bearing":
+                answer = f"I recommended {tier} because the vibration order tracking shows a massive shaft-speed spike, indicating impending bearing failure. High power settings will accelerate failure."
+            else:
+                answer = f"I recommended {tier} based on anomalous readings lowering the overall mission reliability score."
+        else:
+            answer = f"I am currently recommending {tier}, so a divert or RTB is not strictly necessary at this time."
+    elif "wrong" in query or "status" in query or "health" in query:
+        if fault == "normal":
+            answer = f"The engine is operating nominally. EGT is {egt}°C and CHT is {cht}°C, both within expected bounds."
+        else:
+            answer = f"I am detecting an anomaly consistent with a '{fault}' condition. The current health index is {ctx.get('analytics', {}).get('health_index', 0)}%."
+    else:
+        answer = "I can explain our current mission tier recommendations or give a status report on engine health. Try asking 'why did you recommend divert?'"
+        
+    return {"answer": answer}
 
 # Statistical history for Z-Score Anomaly Detection
 history_egt = []

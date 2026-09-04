@@ -24,6 +24,12 @@ export default function MilSpecDigitalTwin() {
   const [kurtosis, setKurtosis] = useState<number>(2.9);
   const [alertState, setAlertState] = useState<{ title: string; desc: string } | null>(null);
   const [suggestedAction, setSuggestedAction] = useState<string | null>(null);
+  
+  const [latestTelemetry, setLatestTelemetry] = useState<any>(null);
+  const [copilotQuery, setCopilotQuery] = useState("");
+  const [copilotResponse, setCopilotResponse] = useState<string | null>(null);
+  const [copilotLoading, setCopilotLoading] = useState(false);
+  const [copilotError, setCopilotError] = useState<string | null>(null);
 
   const handleReset = async () => {
     try {
@@ -34,11 +40,38 @@ export default function MilSpecDigitalTwin() {
     }
   };
 
+  const handleAskCopilot = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!copilotQuery) return;
+    
+    setCopilotLoading(true);
+    setCopilotError(null);
+    try {
+      const res = await fetch("http://localhost:8000/api/copilot", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          query: copilotQuery,
+          fault_mode: faultMode,
+          context: latestTelemetry || {}
+        })
+      });
+      if (!res.ok) throw new Error("API failed");
+      const json = await res.json();
+      setCopilotResponse(json.answer);
+    } catch (err) {
+      setCopilotError("FAILED TO REACH COPILOT. RETRY.");
+    } finally {
+      setCopilotLoading(false);
+    }
+  };
+
   useEffect(() => {
     const fetchTelemetry = async () => {
       try {
         const response = await fetch(`http://localhost:8000/api/telemetry?altitude=${altitude}&throttle=${throttle}&fault_mode=${faultMode}`);
         const result = await response.json();
+        setLatestTelemetry(result);
 
         setHealthIndex(result.analytics.health_index);
         setRulHours(result.analytics.rul_hours);
@@ -168,6 +201,34 @@ export default function MilSpecDigitalTwin() {
                 </div>
                 <input type="range" min="0" max="100" step="1" value={throttle} onChange={(e) => setThrottle(Number(e.target.value))} className="w-full accent-zinc-500 bg-zinc-900 h-1 cursor-crosshair" />
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Ask the Twin Copilot */}
+          <Card className="bg-zinc-950 border-zinc-800 rounded-sm">
+            <CardHeader className="p-3 border-b border-zinc-900">
+              <CardTitle className="text-[10px] font-mono text-blue-400 uppercase tracking-widest">Ask The Twin (Copilot)</CardTitle>
+            </CardHeader>
+            <CardContent className="p-3">
+              <form onSubmit={handleAskCopilot} className="flex gap-2 mb-2">
+                <input 
+                  type="text" 
+                  value={copilotQuery} 
+                  onChange={e => setCopilotQuery(e.target.value)} 
+                  placeholder="Why recommend divert?"
+                  className="flex-1 bg-zinc-900 border border-zinc-800 rounded-sm px-2 text-xs font-mono text-zinc-300 placeholder:text-zinc-600 focus:outline-none focus:border-zinc-500"
+                />
+                <Button type="submit" disabled={copilotLoading} className="h-7 px-3 text-[10px] font-mono bg-blue-900/50 text-blue-400 hover:bg-blue-900 hover:text-blue-300 rounded-sm border border-blue-900">
+                  {copilotLoading ? "..." : "ASK"}
+                </Button>
+              </form>
+              {copilotError && <div className="text-[10px] font-mono text-red-500 mb-2">{copilotError}</div>}
+              {copilotResponse && (
+                <div className="text-xs font-mono text-zinc-400 bg-black p-2 rounded-sm border border-zinc-800">
+                  <span className="text-blue-500 text-[10px] block mb-1">TWIN:</span>
+                  {copilotResponse}
+                </div>
+              )}
             </CardContent>
           </Card>
 
