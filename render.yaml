@@ -1,0 +1,11 @@
+# Render Blueprint — deploys the FastAPI telemetry backend.
+# Usage: Render Dashboard -> New -> Blueprint -> point at this repo.
+services:
+  - type: web
+    name: uav-telemetry-backend
+    runtime: python
+    rootDir: uav-backend
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /docs
