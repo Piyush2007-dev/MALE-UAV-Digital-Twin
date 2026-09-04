@@ -23,6 +23,7 @@ export default function MilSpecDigitalTwin() {
   const [missionTier, setMissionTier] = useState<string>("CONTINUE");
   const [kurtosis, setKurtosis] = useState<number>(2.9);
   const [alertState, setAlertState] = useState<{ title: string; desc: string } | null>(null);
+  const [suggestedAction, setSuggestedAction] = useState<string | null>(null);
 
   const handleReset = async () => {
     try {
@@ -43,6 +44,7 @@ export default function MilSpecDigitalTwin() {
         setRulHours(result.analytics.rul_hours);
         setMissionTier(result.analytics.mission_tier);
         setKurtosis(result.engine.vibration_kurtosis);
+        setSuggestedAction(result.analytics.suggested_action || null);
 
         if (result.analytics.is_anomaly) {
           if (result.analytics.ml_anomaly_score > 0.5) {
@@ -185,6 +187,13 @@ export default function MilSpecDigitalTwin() {
             <Alert className="bg-red-950/20 border-red-900/50 rounded-sm p-3">
               <AlertTitle className="text-xs font-mono font-bold text-red-500 uppercase tracking-widest">{alertState.title}</AlertTitle>
               <AlertDescription className="text-[10px] font-mono text-red-400/80 mt-1">{alertState.desc}</AlertDescription>
+            </Alert>
+          )}
+
+          {suggestedAction && (
+            <Alert className="bg-orange-950/20 border-orange-900/50 rounded-sm p-3">
+              <AlertTitle className="text-xs font-mono font-bold text-orange-500 uppercase tracking-widest">REROUTE ADVISORY</AlertTitle>
+              <AlertDescription className="text-[10px] font-mono text-orange-400/80 mt-1">{suggestedAction}</AlertDescription>
             </Alert>
           )}
         </div>

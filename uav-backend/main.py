@@ -136,6 +136,18 @@ def get_telemetry(altitude: float = 10000, throttle: float = 100.0, fault_mode: 
     else:
         tier = "RTB"
 
+    # Phase 5: Health-Aware Reroute Suggestion
+    suggested_action = None
+    if tier in ["DIVERT", "RTB"]:
+        if fault_mode == "misfire":
+            suggested_action = "Cylinder misfire detected. Recommend immediate RTB to prevent total loss of thrust."
+        elif fault_mode == "cooling":
+            suggested_action = "Cooling degradation detected. Recommend divert to lower altitude to reduce thermal load."
+        elif fault_mode == "bearing":
+            suggested_action = "Bearing wear detected (high vibration). Recommend RTB, avoid high-vibration maneuvers."
+        else:
+            suggested_action = "Unknown anomaly detected. Recommend precautionary divert."
+
     return {
         "timestamp": time.strftime("%H:%M:%S"),
         "environment": {
@@ -163,6 +175,7 @@ def get_telemetry(altitude: float = 10000, throttle: float = 100.0, fault_mode: 
             "is_anomaly": is_anomaly,
             "health_index": round(health_index),
             "rul_hours": round(rul_hours),
-            "mission_tier": tier
+            "mission_tier": tier,
+            "suggested_action": suggested_action
         }
     }
