@@ -3,9 +3,9 @@ from fastapi.middleware.cors import CORSMiddleware
 import math
 import random
 import time
-from pydantic import BaseModel
 from physics_model import calculate_isa, calculate_expected
 from ml_model import detector
+from isolation_forest import score_snapshot
 
 app = FastAPI(title="MALE UAV Digital Twin API")
 
@@ -64,85 +64,6 @@ history_egt = []
 
 def ease(current: float, target: float, rate: float = 0.18) -> float:
     return current + (target - current) * rate
-
-
-class CopilotRequest(BaseModel):
-    query: str
-    context: dict
-    fault_mode: str
-
-
-@app.post("/api/copilot")
-def ask_copilot(req: CopilotRequest):
-    query = req.query.lower()
-    ctx = req.context
-    fault = req.fault_mode
-
-    tier = ctx.get("analytics", {}).get("mission_tier", "UNKNOWN")
-    cht = ctx.get("engine", {}).get("cht", [0])[0]
-    egt = ctx.get("engine", {}).get("egt", [0])[0]
-    rpm = ctx.get("engine", {}).get("rpm", 0)
-
-    answer = "I'm monitoring the digital twin. What would you like to know?"
-
-    if "why" in query and ("divert" in query or "rtb" in query or "recommend" in query):
-        if tier in ["DIVERT", "RTB"]:
-            if fault == "misfire":
-                answer = f"I recommended {tier} because I detected a severe misfire anomaly. Cylinder 1 EGT is currently {egt}°C (expected ~850°C) and RPM has dropped to {rpm}. This indicates a critical loss of combustion."
-            elif fault == "cooling":
-                answer = f"I recommended {tier} due to thermal degradation. The baseline CHT has spiked to {cht}°C, which exceeds the safe operating threshold. Continued operation risks engine seizure."
-            elif fault == "bearing":
-                answer = f"I recommended {tier} because the vibration order tracking shows a massive shaft-speed spike, indicating impending bearing failure. High power settings will accelerate failure."
-            else:
-                answer = f"I recommended {tier} based on anomalous readings lowering the overall mission reliability score."
-        else:
-            answer = f"I am currently recommending {tier}, so a divert or RTB is not strictly necessary at this time."
-    elif "wrong" in query or "status" in query or "health" in query:
-        if fault == "normal":
-            answer = f"The engine is operating nominally. EGT is {egt}°C and CHT is {cht}°C, both within expected bounds."
-        else:
-            answer = f"I am detecting an anomaly consistent with a '{fault}' condition. The current health index is {ctx.get('analytics', {}).get('health_index', 0)}%."
-    else:
-        answer = "I can explain our current mission tier recommendations or give a status report on engine health. Try asking 'why did you recommend divert?'"
-
-    return {"answer": answer}
-
-
-class PlannerRequest(BaseModel):
-    altitude: float
-    duration_hours: float
-    throttle_pattern: str
-
-
-@app.post("/api/planner")
-def run_planner(req: PlannerRequest):
-    sim_wear_rate = 1.5 if req.throttle_pattern == "aggressive" else 1.0
-
-    current_wear = state.accumulated_wear_time
-    theta_1 = 0.01
-    theta_2 = 0.001
-
-    final_wear = current_wear + (sim_wear_rate * req.duration_hours)
-
-    final_hi_val = 1.0 - (theta_1 * math.exp(theta_2 * final_wear))
-    final_health_index = max(0.0, final_hi_val * 100.0)
-
-    try:
-        t_end = math.log(1.0 / theta_1) / theta_2
-        rul_effective = max(0.0, t_end - final_wear)
-        final_rul_hours = rul_effective / sim_wear_rate
-    except ValueError:
-        final_rul_hours = 0.0
-
-    is_safe = final_health_index >= 60.0
-
-    return {
-        "is_safe": is_safe,
-        "final_health_index": round(final_health_index, 2),
-        "final_rul_hours": round(final_rul_hours, 1),
-        "message": f"Mission {'is SAFE' if is_safe else 'is UNSAFE'}. Expected final health index: {round(final_health_index, 1)}%."
-    }
-
 
 @app.get("/api/telemetry")
 def get_telemetry(altitude: float = 10000, throttle: float = 100.0, fault_mode: str = "normal"):
@@ -367,6 +288,13 @@ def get_telemetry(altitude: float = 10000, throttle: float = 100.0, fault_mode: 
             "rul_hours": round(rul_hours),
             "mission_tier": tier,
             "suggested_action": suggested_action,
+            "isolation_forest": score_snapshot({
+                "rpm": rpm_now, "map": measured_map,
+                "op": measured_op, "ff": measured_ff,
+                "egt": measured_egt, "cht": measured_cht,
+                "vibration_kurtosis": measured_kurtosis,
+                "altitude_ft": altitude,
+            }),
             "alert": alert_state
         }
     }
