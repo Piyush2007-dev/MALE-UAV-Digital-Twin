@@ -265,7 +265,36 @@ def get_telemetry(altitude: float = 10000, throttle: float = 100.0, fault_mode: 
     theta_2 = 0.001
     t = state.accumulated_wear_time
     hi_val = max(0.0, 1.0 - (theta_1 * math.exp(theta_2 * t)))
-    health_index = hi_val * 100.0
+    wear_health = hi_val
+    
+    # ==============================================================================
+    # METHODOLOGICAL BASIS: AHP-Enhanced Composite Health Index
+    # Reference: Jiang, Fan, Wen et al., "Health Status Assessment of Unmanned 
+    # Aerial Vehicle Engine Based on AHP Enhancement and Multimodal Fusion," 
+    # Computers, Materials & Continua, 2026.
+    # 
+    # AHP Weighting Rationale:
+    # 1. Wear Formula (0.50) - Most direct representation of accumulated engine degradation.
+    # 2. ML Anomaly Score (0.25) - High-level isolation forest screen for non-linear interactions.
+    # 3. Physics Residuals (0.15) - Direct deviation from expected thermodynamic behavior.
+    # 4. Vibration Kurtosis (0.10) - Specific mechanical/bearing wear indicator.
+    # ==============================================================================
+    anomaly_health = max(0.0, 1.0 - ml_anomaly_score)
+    
+    # Normalize physics residuals against expected noise
+    res_mag = (abs(residuals["rpm"])/20.0 + abs(residuals["egt"])/10.0 + abs(residuals["cht"])/5.0) / 3.0
+    physics_health = max(0.0, 1.0 - (res_mag / 2.0))
+    
+    kurt_dev = abs(measured_kurtosis - 2.9)
+    vibration_health = max(0.0, 1.0 - (kurt_dev / 2.1))
+    
+    composite_hi_val = (
+        0.50 * wear_health +
+        0.25 * anomaly_health +
+        0.15 * physics_health +
+        0.10 * vibration_health
+    )
+    health_index = composite_hi_val * 100.0
 
     try:
         t_end = math.log(1.0 / theta_1) / theta_2
