@@ -45,6 +45,7 @@ export default function HighDensityDigitalTwin() {
   });
 
   const [alertState, setAlertState] = useState<{ title: string; desc: string } | null>(null);
+  const [ifStatus, setIfStatus] = useState<{ label: string; score: number }>({ label: "NORMAL", score: 0 });
   const [sysTime, setSysTime] = useState<string>("SYNCING_CLOCK...");
   const handleReset = async () => {
     try {
@@ -90,6 +91,9 @@ export default function HighDensityDigitalTwin() {
         });
 
         setAlertState(result.analytics.alert);
+        if (result.analytics.isolation_forest) {
+          setIfStatus({ label: result.analytics.isolation_forest.if_label, score: result.analytics.isolation_forest.if_score });
+        }
         setVibrationData(result.vibration_fft);
         setSysTime(new Date().toISOString().replace('T', ' ').substring(0, 19) + 'Z');
 
@@ -210,6 +214,29 @@ export default function HighDensityDigitalTwin() {
                     </CardContent>
                   </Card>
                 ))}
+              </div>
+
+              {/* Isolation Forest Anomaly Badge */}
+              <div className="flex items-center gap-2 shrink-0 px-1">
+                <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Isolation Forest</span>
+                <span
+                  title={`IF anomaly score: ${ifStatus.score}`}
+                  className={cn(
+                    "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider border transition-colors",
+                    ifStatus.label === "NORMAL"
+                      ? "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/50"
+                      : "bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800/50 animate-pulse"
+                  )}
+                >
+                  <span className={cn(
+                    "w-1.5 h-1.5 rounded-full",
+                    ifStatus.label === "NORMAL" ? "bg-emerald-500" : "bg-red-500"
+                  )} />
+                  {ifStatus.label === "NORMAL" ? "Normal" : "Anomaly"}
+                </span>
+                <span className="text-[9px] font-mono text-zinc-400 dark:text-zinc-500 tabular-nums">
+                  score: {ifStatus.score.toFixed(4)}
+                </span>
               </div>
 
               {/* Dynamic Zooming Charts */}

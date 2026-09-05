@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import math
 import random
 import time
+from isolation_forest import score_snapshot
 
 app = FastAPI(title="MALE UAV Digital Twin API")
 
@@ -224,6 +225,13 @@ def get_telemetry(altitude: float = 10000, fault_mode: str = "normal"):
         "vibration_fft": vibration_fft,
         "analytics": {
             "is_anomaly": is_anomaly,
+            "isolation_forest": score_snapshot({
+                "rpm": rpm_now, "map": measured_map,
+                "op": measured_op, "ff": measured_ff,
+                "egt": measured_egt, "cht": measured_cht,
+                "vibration_kurtosis": measured_kurtosis,
+                "altitude_ft": altitude,
+            }),
             "health_index": round(health_index, 2),
             "rul_hours": rul_hours,
             "alert": alert_state
