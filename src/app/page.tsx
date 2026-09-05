@@ -260,9 +260,9 @@ export default function HighDensityDigitalTwin() {
   ] as const;
 
   return (
-    <div className="h-screen w-screen overflow-hidden font-mono flex dark bg-[#050505] text-zinc-100">
+    <div className="min-h-screen w-full font-mono flex dark bg-[#050505] text-zinc-100">
 
-      <div className="w-16 border-r border-white/5 bg-[#0a0a0a] flex flex-col items-center py-6 space-y-8 z-10 shrink-0 shadow-sm">
+      <div className="w-16 border-r border-white/5 bg-[#0a0a0a] flex flex-col items-center py-6 space-y-8 z-10 shrink-0 shadow-sm sticky top-0 h-screen">
         <div className="text-blue-500 font-bold text-xl mb-4 tracking-tighter">DT</div>
         <button onClick={() => setActiveTab("dashboard")} className={`p-3 rounded-xl transition-colors ${activeTab === "dashboard" ? "bg-blue-600/20 text-blue-400" : "text-zinc-500 hover:text-zinc-300"}`} title="Dashboard">
           <LayoutDashboard className="w-5 h-5" />
@@ -278,7 +278,7 @@ export default function HighDensityDigitalTwin() {
         </button>
       </div>
 
-      <div className="flex-1 flex flex-col p-4 md:p-6 overflow-x-hidden overflow-y-auto xl:overflow-hidden">
+      <div className="flex-1 flex flex-col p-4 md:p-6 overflow-x-hidden">
 
         <div className="flex justify-between items-center text-[10px] font-mono text-zinc-400 border-b border-white/10 pb-3 mb-4 tracking-widest uppercase shrink-0">
           <div className="flex space-x-6 items-center">
