@@ -3,6 +3,9 @@ from fastapi.middleware.cors import CORSMiddleware
 import math
 import random
 import time
+from pydantic import BaseModel
+from physics_model import calculate_isa, calculate_expected
+from ml_model import detector
 
 app = FastAPI(title="MALE UAV Digital Twin API")
 
@@ -15,82 +18,134 @@ app.add_middleware(
 # ---------------------------------------------------------------------------
 # 4-cylinder, 4-stroke (Otto) cycle model
 # ---------------------------------------------------------------------------
-# A crankshaft turns 720° per full engine cycle; each cylinder fires once per
-# cycle. With 4 cylinders in a 1-3-4-2 firing order the combustion events are
-# spaced 180° of crank angle apart.  Per-cylinder exhaust-gas and cylinder-head
-# temperatures are solved as first-order thermal lags driven by that cylinder's
-# own firing rate, so the feed reads like a real engine instead of random noise.
-# ---------------------------------------------------------------------------
 CYLINDERS = 4
-FIRING_ORDER = [0, 2, 3, 1]               # cylinders 1 -> 3 -> 4 -> 2
+FIRING_ORDER = [0, 2, 3, 1]
 FIRE_CRANK = {c: 180.0 * i for i, c in enumerate(FIRING_ORDER)}
 CYCLE_DEG = 720.0
 
-# Static asymmetry between cylinders (sensor placement / injector trim).
-# Real 4-cyl engines show a few °C bank-to-bank spread at cruise; without it
-# the four traces pile onto one line.
-CYL_TRIM_EGT = [2.0, -1.2, 0.5, -1.3]     # °C offset per cylinder at cruise
+CYL_TRIM_EGT = [2.0, -1.2, 0.5, -1.3]
 CYL_TRIM_CHT = [0.9, -0.7, 0.4, -0.6]
 
-# Thermal response: exhaust gas reacts in seconds, the head in ~10 s
 TAU_EGT = 1.0
 TAU_CHT = 10.0
-CHT_WARMUP_T = 45.0                        # coolant/head warm-up time constant (s)
+CHT_WARMUP_T = 45.0
 
 
 class EngineState:
     """State carried between API calls: wear bookkeeping + engine-cycle state."""
 
     def __init__(self):
-        # PHM bookkeeping
         self.cumulative_wear = 0.0
+        self.operating_hours = 0.0
+        self.accumulated_wear_time = 0.0
 
-        # Smoothed fault envelopes (each eases toward its target per tick)
-        self.egt_boost = 0.0    # Cyl 1 EGT during misfire
-        self.cht_boost = 0.0    # All cylinders during cooling fault
-        self.kurt_boost = 0.0   # Bearing fault kurtosis
-        self.op_drop = 0.0      # Oil pressure drop during cooling fault
-        self.rpm_penalty = 0.0  # RPM sag during misfire
-        self.map_boost = 0.0    # MAP rise during misfire
+        self.egt_boost = 0.0
+        self.cht_boost = 0.0
+        self.kurt_boost = 0.0
+        self.op_drop = 0.0
+        self.rpm_penalty = 0.0
+        self.map_boost = 0.0
 
-        # Crankshaft & thermal state
-        self.sim_time_s = 0.0                 # simulated engine running time
-        self.last_poll_s = None               # wall clock of previous poll
+        self.sim_time_s = 0.0
+        self.last_poll_s = None
         self.crank_deg = random.uniform(0.0, CYCLE_DEG)
-        self.fire_count = [0, 0, 0, 0]        # total firings per cylinder
+        self.fire_count = [0, 0, 0, 0]
         self.egt_state = [806.0, 806.0, 806.0, 806.0]
         self.cht_state = [91.0, 91.0, 91.0, 91.0]
-        # Slow cylinder-to-cylinder drift.  Seeded apart so the traces are
-        # visibly separated and alive from the first poll (no 2-min warm-in).
         self.egt_wander = [random.uniform(-1.6, 1.6) for _ in range(CYLINDERS)]
         self.cht_wander = [random.uniform(-0.9, 0.9) for _ in range(CYLINDERS)]
-        self.load_wander = 0.0                # cruise/throttle corrections
+        self.load_wander = 0.0
         self.kurt_wander = 0.0
 
 
 state = EngineState()
+history_egt = []
 
 
 def ease(current: float, target: float, rate: float = 0.18) -> float:
-    """Move one step toward target (first-order filter)."""
     return current + (target - current) * rate
 
 
-def calculate_isa(altitude_ft: float):
-    """ISA model for altitude physics."""
-    altitude_m = altitude_ft * 0.3048
-    T0 = 288.15  # Sea level standard temp (K)
-    L = 0.0065   # Lapse rate (K/m)
+class CopilotRequest(BaseModel):
+    query: str
+    context: dict
+    fault_mode: str
 
-    T_amb_k = T0 - (L * altitude_m)
-    T_amb_c = T_amb_k - 273.15
-    density_ratio = math.pow((T_amb_k / T0), 4.256)
 
-    return T_amb_c, density_ratio
+@app.post("/api/copilot")
+def ask_copilot(req: CopilotRequest):
+    query = req.query.lower()
+    ctx = req.context
+    fault = req.fault_mode
+
+    tier = ctx.get("analytics", {}).get("mission_tier", "UNKNOWN")
+    cht = ctx.get("engine", {}).get("cht", [0])[0]
+    egt = ctx.get("engine", {}).get("egt", [0])[0]
+    rpm = ctx.get("engine", {}).get("rpm", 0)
+
+    answer = "I'm monitoring the digital twin. What would you like to know?"
+
+    if "why" in query and ("divert" in query or "rtb" in query or "recommend" in query):
+        if tier in ["DIVERT", "RTB"]:
+            if fault == "misfire":
+                answer = f"I recommended {tier} because I detected a severe misfire anomaly. Cylinder 1 EGT is currently {egt}°C (expected ~850°C) and RPM has dropped to {rpm}. This indicates a critical loss of combustion."
+            elif fault == "cooling":
+                answer = f"I recommended {tier} due to thermal degradation. The baseline CHT has spiked to {cht}°C, which exceeds the safe operating threshold. Continued operation risks engine seizure."
+            elif fault == "bearing":
+                answer = f"I recommended {tier} because the vibration order tracking shows a massive shaft-speed spike, indicating impending bearing failure. High power settings will accelerate failure."
+            else:
+                answer = f"I recommended {tier} based on anomalous readings lowering the overall mission reliability score."
+        else:
+            answer = f"I am currently recommending {tier}, so a divert or RTB is not strictly necessary at this time."
+    elif "wrong" in query or "status" in query or "health" in query:
+        if fault == "normal":
+            answer = f"The engine is operating nominally. EGT is {egt}°C and CHT is {cht}°C, both within expected bounds."
+        else:
+            answer = f"I am detecting an anomaly consistent with a '{fault}' condition. The current health index is {ctx.get('analytics', {}).get('health_index', 0)}%."
+    else:
+        answer = "I can explain our current mission tier recommendations or give a status report on engine health. Try asking 'why did you recommend divert?'"
+
+    return {"answer": answer}
+
+
+class PlannerRequest(BaseModel):
+    altitude: float
+    duration_hours: float
+    throttle_pattern: str
+
+
+@app.post("/api/planner")
+def run_planner(req: PlannerRequest):
+    sim_wear_rate = 1.5 if req.throttle_pattern == "aggressive" else 1.0
+
+    current_wear = state.accumulated_wear_time
+    theta_1 = 0.01
+    theta_2 = 0.001
+
+    final_wear = current_wear + (sim_wear_rate * req.duration_hours)
+
+    final_hi_val = 1.0 - (theta_1 * math.exp(theta_2 * final_wear))
+    final_health_index = max(0.0, final_hi_val * 100.0)
+
+    try:
+        t_end = math.log(1.0 / theta_1) / theta_2
+        rul_effective = max(0.0, t_end - final_wear)
+        final_rul_hours = rul_effective / sim_wear_rate
+    except ValueError:
+        final_rul_hours = 0.0
+
+    is_safe = final_health_index >= 60.0
+
+    return {
+        "is_safe": is_safe,
+        "final_health_index": round(final_health_index, 2),
+        "final_rul_hours": round(final_rul_hours, 1),
+        "message": f"Mission {'is SAFE' if is_safe else 'is UNSAFE'}. Expected final health index: {round(final_health_index, 1)}%."
+    }
 
 
 @app.get("/api/telemetry")
-def get_telemetry(altitude: float = 10000, fault_mode: str = "normal"):
+def get_telemetry(altitude: float = 10000, throttle: float = 100.0, fault_mode: str = "normal"):
     now = time.monotonic()
     if state.last_poll_s is None:
         state.last_poll_s = now
@@ -99,9 +154,9 @@ def get_telemetry(altitude: float = 10000, fault_mode: str = "normal"):
     state.sim_time_s += dt
 
     t_amb_c, density_ratio = calculate_isa(altitude)
-    expected_rpm = 4800 * density_ratio   # lower air density at altitude -> less power
+    expected_metrics = calculate_expected(altitude, throttle)
+    expected_rpm = expected_metrics["expected_rpm"]
 
-    # --- Fault envelopes: what each injection drives the engine toward
     if fault_mode == "misfire":
         state.cumulative_wear += 0.5
         egt_target, cht_target = 60.0, 0.0
@@ -118,13 +173,11 @@ def get_telemetry(altitude: float = 10000, fault_mode: str = "normal"):
         kurt_target, op_target = 3.2, 0.0
         rpm_target, map_target = 0.0, 0.0
     else:
-        # Nominal: only an imperceptible long-term drift (~55 h at 1 Hz).
         state.cumulative_wear += 0.0005
         egt_target, cht_target = 0.0, 0.0
         kurt_target, op_target = 0.0, 0.0
         rpm_target, map_target = 0.0, 0.0
 
-    # Ramp fault effects instead of applying them as hard steps
     state.egt_boost = ease(state.egt_boost, egt_target)
     state.cht_boost = ease(state.cht_boost, cht_target)
     state.kurt_boost = ease(state.kurt_boost, kurt_target)
@@ -132,14 +185,12 @@ def get_telemetry(altitude: float = 10000, fault_mode: str = "normal"):
     state.rpm_penalty = ease(state.rpm_penalty, rpm_target)
     state.map_boost = ease(state.map_boost, map_target)
 
-    # Cruise "governor" wander: small smooth corrections around the setpoint
     state.load_wander = state.load_wander * 0.94 + random.uniform(-3.0, 3.0)
     state.kurt_wander = max(-0.05, min(0.05, state.kurt_wander * 0.9 + random.uniform(-0.008, 0.008)))
 
     rpm_now = expected_rpm - state.rpm_penalty + state.load_wander
-    firing_rate = max(0.0, rpm_now / 120.0)   # each cylinder fires once per 2 revolutions
+    firing_rate = max(0.0, rpm_now / 120.0)
 
-    # --- Advance the crankshaft and count each cylinder's combustion events
     state.crank_deg = (state.crank_deg + rpm_now * 6.0 * dt) % CYCLE_DEG
     for c in range(CYLINDERS):
         offset = CYCLE_DEG - FIRE_CRANK[c]
@@ -147,18 +198,11 @@ def get_telemetry(altitude: float = 10000, fault_mode: str = "normal"):
         if wraps > state.fire_count[c]:
             state.fire_count[c] = wraps
 
-    # --- Thermal model -------------------------------------------------------
-    # Each cylinder's EGT/CHT relax toward an equilibrium set by its own firing
-    # rate (combustion heat) and cylinder trim, so the four traces stay gently
-    # separated, drift slowly, and move together when load/RPM change.
     egt_decay = math.exp(-dt / TAU_EGT)
     cht_decay = math.exp(-dt / TAU_CHT)
-    warmup = 1.0 - math.exp(-state.sim_time_s / CHT_WARMUP_T)   # cold-start climb
+    warmup = 1.0 - math.exp(-state.sim_time_s / CHT_WARMUP_T)
 
     for c in range(CYLINDERS):
-        # Mean-reverting random walk: EGT drifts ±2-3 °C over ~a minute,
-        # CHT ±~1 °C.  Step sizes are small enough to stay smooth tick-to-tick
-        # but large enough that the traces never freeze on one integer.
         state.egt_wander[c] = max(-3.0, min(3.0, state.egt_wander[c] * 0.985 + random.uniform(-0.3, 0.3)))
         state.cht_wander[c] = max(-1.4, min(1.4, state.cht_wander[c] * 0.99 + random.uniform(-0.12, 0.12)))
 
@@ -170,18 +214,15 @@ def get_telemetry(altitude: float = 10000, fault_mode: str = "normal"):
             + state.cht_wander[c] + state.cht_boost
         state.cht_state[c] = ease(state.cht_state[c], cht_target_c, 1.0 - cht_decay)
 
-    # Sensor noise: EGT probes read ±0.4 °C, CHT ±0.3 °C
     measured_egt = [e + random.uniform(-0.4, 0.4) for e in state.egt_state]
-    measured_egt[0] += state.egt_boost          # misfire: unburnt fuel burns in the exhaust
+    measured_egt[0] += state.egt_boost
     measured_cht = [c + random.uniform(-0.3, 0.3) for c in state.cht_state]
 
-    # Manifold / oil / fuel / vibration
     measured_map = 29.92 * density_ratio + state.map_boost + random.uniform(-0.1, 0.1)
     measured_op = 60.0 - state.op_drop + random.uniform(-0.4, 0.4)
     measured_ff = 8.5 * density_ratio * (rpm_now / expected_rpm) + random.uniform(-0.04, 0.04)
     measured_kurtosis = 2.9 + state.kurt_wander + state.kurt_boost + random.uniform(-0.02, 0.02)
 
-    # Order-tracked vibration: 1x tracks firing rate, 2x follows bearing wear
     vibration_fft = [
         {"order": "0.5x", "amp": round(0.1 + random.uniform(0, 0.02), 2)},
         {"order": "1x", "amp": round(0.42 + firing_rate * 0.012 + random.uniform(-0.02, 0.02), 2)},
@@ -189,16 +230,99 @@ def get_telemetry(altitude: float = 10000, fault_mode: str = "normal"):
         {"order": "3x", "amp": round(0.15 + firing_rate * 0.001 + random.uniform(0, 0.02), 2)},
     ]
 
-    # Fault signatures on the eased traces (real thresholds, not z-scores,
-    # which cannot separate a smooth fault ramp from sensor jitter):
-    #   misfire -> cyl-1 EGT isolated above the other three cylinders
-    #   cooling -> absolute CHT over-temperature
-    #   bearing -> kurtosis above the 2x-order warning level
-    egt_gap = measured_egt[0] - max(measured_egt[1:])
-    is_anomaly = egt_gap > 4.0 or max(measured_cht) > 120.0 or measured_kurtosis > 5.0
+    residuals = {
+        "rpm": round(rpm_now - expected_metrics["expected_rpm"]),
+        "egt": round(measured_egt[0] - expected_metrics["expected_egt"]),
+        "cht": round(measured_cht[0] - expected_metrics["expected_cht"])
+    }
 
-    health_index = max(0.0, 100.0 - state.cumulative_wear)
-    rul_hours = max(0, int((health_index / 100.0) * 2000))
+    history_egt.append(measured_egt[0])
+    if len(history_egt) > 30:
+        history_egt.pop(0)
+
+    z_score_val = 0
+    if len(history_egt) == 30:
+        mean_egt = sum(history_egt) / len(history_egt)
+        variance = sum((x - mean_egt) ** 2 for x in history_egt) / len(history_egt)
+        std_dev = math.sqrt(variance) if variance > 0 else 1
+        z_score_val = abs(measured_egt[0] - mean_egt) / std_dev
+
+    ml_anomaly_score, ml_anomaly_reason = detector.evaluate(residuals)
+
+    egt_gap = measured_egt[0] - max(measured_egt[1:])
+    is_anomaly = (ml_anomaly_score > 0.5) or (z_score_val > 3.0) or egt_gap > 4.0 or max(measured_cht) > 120.0 or measured_kurtosis > 5.0
+
+    state.operating_hours += 1.0
+    wear_rate = {
+        "normal": 1.0,
+        "misfire": 15.0,
+        "cooling": 10.0,
+        "bearing": 25.0
+    }.get(fault_mode, 1.0)
+    state.accumulated_wear_time += wear_rate
+
+    theta_1 = 0.01
+    theta_2 = 0.001
+    t = state.accumulated_wear_time
+    hi_val = max(0.0, 1.0 - (theta_1 * math.exp(theta_2 * t)))
+    wear_health = hi_val
+    
+    # ==============================================================================
+    # METHODOLOGICAL BASIS: AHP-Enhanced Composite Health Index
+    # Reference: Jiang, Fan, Wen et al., "Health Status Assessment of Unmanned 
+    # Aerial Vehicle Engine Based on AHP Enhancement and Multimodal Fusion," 
+    # Computers, Materials & Continua, 2026.
+    # 
+    # AHP Weighting Rationale:
+    # 1. Wear Formula (0.50) - Most direct representation of accumulated engine degradation.
+    # 2. ML Anomaly Score (0.25) - High-level isolation forest screen for non-linear interactions.
+    # 3. Physics Residuals (0.15) - Direct deviation from expected thermodynamic behavior.
+    # 4. Vibration Kurtosis (0.10) - Specific mechanical/bearing wear indicator.
+    # ==============================================================================
+    anomaly_health = max(0.0, 1.0 - ml_anomaly_score)
+    
+    # Normalize physics residuals against expected noise
+    res_mag = (abs(residuals["rpm"])/20.0 + abs(residuals["egt"])/10.0 + abs(residuals["cht"])/5.0) / 3.0
+    physics_health = max(0.0, 1.0 - (res_mag / 2.0))
+    
+    kurt_dev = abs(measured_kurtosis - 2.9)
+    vibration_health = max(0.0, 1.0 - (kurt_dev / 2.1))
+    
+    composite_hi_val = (
+        0.50 * wear_health +
+        0.25 * anomaly_health +
+        0.15 * physics_health +
+        0.10 * vibration_health
+    )
+    health_index = composite_hi_val * 100.0
+
+    try:
+        t_end = math.log(1.0 / theta_1) / theta_2
+        rul_effective_time_remaining = max(0.0, t_end - t)
+        rul_hours = rul_effective_time_remaining / wear_rate
+    except ValueError:
+        rul_hours = 0.0
+
+    reliability_score = health_index / 100.0
+    if reliability_score >= 0.95:
+        tier = "CONTINUE"
+    elif reliability_score >= 0.80:
+        tier = "DERATE"
+    elif reliability_score >= 0.60:
+        tier = "DIVERT"
+    else:
+        tier = "RTB"
+
+    suggested_action = None
+    if tier in ["DIVERT", "RTB"]:
+        if fault_mode == "misfire":
+            suggested_action = "Cylinder misfire detected. Recommend immediate RTB to prevent total loss of thrust."
+        elif fault_mode == "cooling":
+            suggested_action = "Cooling degradation detected. Recommend divert to lower altitude to reduce thermal load."
+        elif fault_mode == "bearing":
+            suggested_action = "Bearing wear detected (high vibration). Recommend RTB, avoid high-vibration maneuvers."
+        else:
+            suggested_action = "Unknown anomaly detected. Recommend precautionary divert."
 
     alert_state = None
     if fault_mode == "misfire" and state.egt_boost > 4.0:
@@ -211,7 +335,13 @@ def get_telemetry(altitude: float = 10000, fault_mode: str = "normal"):
     return {
         "timestamp": time.strftime("%H:%M:%S"),
         "hex_id": f"0x{random.randint(0, 16777215):06X}",
-        "environment": {"altitude_ft": altitude},
+        "environment": {
+            "altitude_ft": altitude,
+            "throttle_pct": throttle,
+            "ambient_temp_c": round(t_amb_c, 1),
+            "air_density_ratio": round(density_ratio, 3),
+            "confidence_status": detector.check_confidence(altitude, throttle)
+        },
         "engine": {
             "rpm": round(rpm_now + random.uniform(-1, 1)),
             "map": round(measured_map, 1),
@@ -221,11 +351,22 @@ def get_telemetry(altitude: float = 10000, fault_mode: str = "normal"):
             "cht": [round(c, 1) for c in measured_cht],
             "vibration_kurtosis": round(measured_kurtosis, 2)
         },
+        "expected": {
+            "rpm": round(expected_metrics["expected_rpm"]),
+            "egt": round(expected_metrics["expected_egt"]),
+            "cht": round(expected_metrics["expected_cht"])
+        },
+        "residuals": residuals,
         "vibration_fft": vibration_fft,
         "analytics": {
+            "z_score": round(z_score_val, 2),
+            "ml_anomaly_score": round(ml_anomaly_score, 3),
+            "anomaly_reason": ml_anomaly_reason,
             "is_anomaly": is_anomaly,
-            "health_index": round(health_index, 2),
-            "rul_hours": rul_hours,
+            "health_index": round(health_index),
+            "rul_hours": round(rul_hours),
+            "mission_tier": tier,
+            "suggested_action": suggested_action,
             "alert": alert_state
         }
     }
