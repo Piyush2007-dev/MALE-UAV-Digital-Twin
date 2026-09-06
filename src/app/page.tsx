@@ -36,7 +36,8 @@ export default function HighDensityDigitalTwin() {
   const [rawLogs, setRawLogs] = useState<string[]>([]);
 
   const [faultMode, setFaultMode] = useState<FaultMode>("normal");
-  const [altitude, setAltitude] = useState<number>(10000);
+  const [altitude, setAltitude] = useState<number>(15000);
+  const [throttle, setThrottle] = useState<number>(100);
   const [pollingRate, setPollingRate] = useState<number>(1000);
 
   const [metrics, setMetrics] = useState({
@@ -77,7 +78,7 @@ export default function HighDensityDigitalTwin() {
   useEffect(() => {
     const fetchTelemetry = async () => {
       try {
-        const response = await fetch(`${API_BASE}/api/telemetry?altitude=${altitude}&fault_mode=${faultMode}`);
+        const response = await fetch(`${API_BASE}/api/telemetry?altitude=${altitude}&throttle=${throttle}&fault_mode=${faultMode}`);
         const result = await response.json();
 
         setMetrics({
@@ -118,7 +119,7 @@ export default function HighDensityDigitalTwin() {
 
     const interval = setInterval(fetchTelemetry, pollingRate);
     return () => clearInterval(interval);
-  }, [faultMode, altitude, pollingRate]);
+  }, [faultMode, altitude, throttle, pollingRate]);
 
   // Single source of truth for every light-mode panel so cards can't drift apart.
   const panelCls = "bg-white dark:bg-[#121214] shadow-sm";
@@ -246,7 +247,7 @@ export default function HighDensityDigitalTwin() {
                     <CardTitle className="text-xs font-bold text-zinc-600 dark:text-zinc-400 uppercase tracking-widest">EGT Real-Time</CardTitle>
                     <span className="flex items-baseline gap-1 px-2 py-0.5 rounded-md bg-zinc-100 dark:bg-white/5 whitespace-nowrap">
                       <span className="text-[9px] font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-500">Avg</span>
-                      <span className="text-sm font-bold font-mono tabular-nums text-zinc-800 dark:text-zinc-100">{egtAvg ?? '--'}�C</span>
+                      <span className="text-sm font-bold font-mono tabular-nums text-zinc-800 dark:text-zinc-100">{egtAvg ?? '--'}°C</span>
                     </span>
                   </CardHeader>
                   <CardContent className="flex-1 p-3 min-h-0">
@@ -254,7 +255,7 @@ export default function HighDensityDigitalTwin() {
                       <AreaChart data={data}>
                         <CartesianGrid strokeDasharray="2 4" stroke={gridColor} vertical={false} />
                         <XAxis dataKey="time" hide />
-                        <YAxis domain={['dataMin - 5', 'dataMax + 5']} stroke={axisColor} fontSize={9} width={30} tickFormatter={(v) => `${Math.round(v)}�`} />
+                        <YAxis domain={['dataMin - 5', 'dataMax + 5']} stroke={axisColor} fontSize={9} width={30} tickFormatter={(v) => `${Math.round(v)}°`} />
                         <Tooltip contentStyle={{ backgroundColor: theme === 'dark' ? "#09090b" : "#ffffff", border: `1px solid ${gridColor}`, fontSize: "11px", borderRadius: "6px", color: theme === 'dark' ? "#f4f4f5" : "#18181b" }} />
                         <Area type="monotone" name="CYL 1" dataKey="egt1" stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.06} strokeWidth={2} isAnimationActive={false} />
                         <Area type="monotone" name="CYL 2" dataKey="egt2" stroke="#3b82f6" fill="transparent" strokeWidth={1} isAnimationActive={false} />
@@ -270,7 +271,7 @@ export default function HighDensityDigitalTwin() {
                     <CardTitle className="text-xs font-bold text-zinc-600 dark:text-zinc-400 uppercase tracking-widest">CHT Real-Time</CardTitle>
                     <span className="flex items-baseline gap-1 px-2 py-0.5 rounded-md bg-zinc-100 dark:bg-white/5 whitespace-nowrap">
                       <span className="text-[9px] font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-500">Avg</span>
-                      <span className="text-sm font-bold font-mono tabular-nums text-zinc-800 dark:text-zinc-100">{chtAvg ?? '--'}�C</span>
+                      <span className="text-sm font-bold font-mono tabular-nums text-zinc-800 dark:text-zinc-100">{chtAvg ?? '--'}°C</span>
                     </span>
                   </CardHeader>
                   <CardContent className="flex-1 p-3 min-h-0">
@@ -278,7 +279,7 @@ export default function HighDensityDigitalTwin() {
                       <AreaChart data={data}>
                         <CartesianGrid strokeDasharray="2 4" stroke={gridColor} vertical={false} />
                         <XAxis dataKey="time" hide />
-                        <YAxis domain={['dataMin - 1', 'dataMax + 1']} stroke={axisColor} fontSize={9} width={30} tickFormatter={(v) => `${Math.round(v)}�`} />
+                        <YAxis domain={['dataMin - 1', 'dataMax + 1']} stroke={axisColor} fontSize={9} width={30} tickFormatter={(v) => `${Math.round(v)}°`} />
                         <Tooltip contentStyle={{ backgroundColor: theme === 'dark' ? "#09090b" : "#ffffff", border: `1px solid ${gridColor}`, fontSize: "11px", borderRadius: "6px", color: theme === 'dark' ? "#f4f4f5" : "#18181b" }} />
                         <Area type="monotone" name="CYL 1" dataKey="cht1" stroke="#10b981" fill="#10b981" fillOpacity={0.06} strokeWidth={2} isAnimationActive={false} />
                         <Area type="monotone" name="CYL 2" dataKey="cht2" stroke="#8b5cf6" fill="transparent" strokeWidth={1} isAnimationActive={false} />
@@ -333,6 +334,13 @@ export default function HighDensityDigitalTwin() {
                       <span>Altitude MSL</span><span className="text-zinc-800 dark:text-zinc-100">{altitude} ft</span>
                     </div>
                     <input type="range" min="0" max="30000" step="500" value={altitude} onChange={(e) => setAltitude(Number(e.target.value))} className="w-full accent-blue-600 dark:accent-blue-500 bg-zinc-200 dark:bg-zinc-800 h-1 rounded-full appearance-none cursor-pointer" />
+                  </div>
+
+                  <div className="space-y-3 pt-2">
+                    <div className="flex justify-between text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
+                      <span>Throttle</span><span className="text-zinc-800 dark:text-zinc-100">{throttle} %</span>
+                    </div>
+                    <input type="range" min="40" max="100" step="1" value={throttle} onChange={(e) => setThrottle(Number(e.target.value))} className="w-full accent-blue-600 dark:accent-blue-500 bg-zinc-200 dark:bg-zinc-800 h-1 rounded-full appearance-none cursor-pointer" />
                   </div>
 
                   <div className="space-y-3 pt-4 border-t border-zinc-100 dark:border-white/5">
