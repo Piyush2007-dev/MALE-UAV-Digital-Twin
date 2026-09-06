@@ -267,7 +267,7 @@ export function DialogSelectGroup({ children, className }: DialogSelectGroupProp
 
 export function useDialog(open: boolean, onOpenChange: (open: boolean) => void) {
   const handleClose = React.useCallback(
-    (event: DialogCloseEvent) => {
+    () => {
       onOpenChange(false);
     },
     [onOpenChange]
