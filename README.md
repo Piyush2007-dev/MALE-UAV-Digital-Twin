@@ -9,10 +9,13 @@ The system couples a high-fidelity Python-based thermodynamic physics engine wit
 The architecture is divided into two primary layers:
 
 ### 1. Physics & Machine Learning Backend (FastAPI)
-Located in `uav-backend/`, this Python engine serves as the true "twin":
-* **Thermodynamic Engine Simulation:** Models a 4-stroke Otto cycle turbocharged engine using the International Standard Atmosphere (ISA) to simulate altitude lapse rates, turbo boost compensation, and thermal equilibrium (EGT/CHT).
-* **Machine Learning Anomaly Detection:** Implements an unsupervised Scikit-Learn `IsolationForest` that is dynamically trained on synthetic healthy operational envelopes to flag cross-cylinder imbalances, cooling faults, or bearing wear.
-* **Component Wear Modeling:** Tracks cumulative operational damage utilizing exponential decay functions to estimate Remaining Useful Life (RUL) and generate composite Health Indices (HI).
+Located in `uav-backend/`, this Python engine serves as the true "twin". It is built with a highly-modular, domain-driven architecture:
+* **`api/` & `schemas/`**: Fast and thin routing layer handling HTTP endpoints (`/api/telemetry`, `/api/reset`).
+* **`physics/`**: The thermodynamic engine core. Simulates a turbocharged 4-stroke Otto cycle engine using the International Standard Atmosphere (ISA) to model altitude lapse rates, turbo boost compensation, and thermal equilibrium (EGT/CHT).
+* **`ml/`**: Machine Learning pipeline. Implements an unsupervised Scikit-Learn `IsolationForest` to rapidly screen for anomalies (cross-cylinder imbalances, cooling faults), paired with deterministic classification rules.
+* **`health/`**: Predictive Maintenance layer. Tracks cumulative operational damage utilizing exponential decay functions to estimate Remaining Useful Life (RUL) and generate an AHP-weighted composite Health Index (HI).
+* **`decision/`**: Automated decision routing that assigns mission reliability tiers (CONTINUE, DERATE, DIVERT, RTB) based on real-time health data.
+* **`state.py`**: Manages and persists the cross-cycle engine state across HTTP polling calls.
 
 ### 2. Frontend Visualization Dashboard (Next.js)
 Located in `src/`, the React dashboard acts as the Ground Control Station (GCS):
