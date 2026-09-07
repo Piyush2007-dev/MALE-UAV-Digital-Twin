@@ -212,7 +212,7 @@ def get_telemetry(altitude: float = 10000, throttle: float = 100.0, fault_mode: 
         "bearing": 25.0,
     }.get(fault_mode, 1.0)
 
-    state.accumulated_wear_time += wear_rate * dt
+    state.accumulated_wear_time += wear_rate * (dt / 3600.0)
     state.operating_hours       += dt / 3600.0
 
     theta_1 = 0.01
