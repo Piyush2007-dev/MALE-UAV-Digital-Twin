@@ -148,8 +148,14 @@ def get_telemetry(altitude: float = 10000, throttle: float = 100.0, fault_mode: 
         "throttle":          throttle,
     }
     if_result = score_snapshot(snapshot_telemetry)
-    # Map raw IF score to 0.0-1.0 to preserve backward compat with ml_anomaly_score
-    ml_anomaly_score = max(0.0, min(1.0, 0.5 - if_result["if_score"] * 2))
+    # Map raw IF score to 0.0-1.0.
+    # If the IF classifier itself says NORMAL, cap the anomaly score at 0 so
+    # a borderline raw score doesn't silently penalise HI on a healthy engine
+    # (this commonly fires on cold-start / just-after-reset readings).
+    if if_result["if_label"] == "NORMAL":
+        ml_anomaly_score = 0.0
+    else:
+        ml_anomaly_score = max(0.0, min(1.0, 0.5 - if_result["if_score"] * 2))
     
     ml_anomaly_reason = classify_fault(snapshot_telemetry, if_result["if_label"])
 

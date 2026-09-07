@@ -10,7 +10,9 @@ def get_wear_rate(fault_mode: str) -> float:
 
 def calculate_wear_health(accumulated_wear_time: float, theta_1: float = 0.01, theta_2: float = 0.001) -> float:
     t = accumulated_wear_time
-    return max(0.0, 1.0 - (theta_1 * math.exp(theta_2 * t)))
+    # Use (exp(theta_2*t) - 1) so the degradation starts at exactly 0 when t=0,
+    # giving wear_health = 1.0 (100%) on a fresh / just-reset engine.
+    return max(0.0, 1.0 - (theta_1 * (math.exp(theta_2 * t) - 1.0)))
 
 def calculate_rul_hours(accumulated_wear_time: float, current_wear_rate: float, theta_1: float = 0.01, theta_2: float = 0.001) -> float:
     t = accumulated_wear_time
