@@ -2,7 +2,7 @@ import time
 import math
 import random
 from fastapi import APIRouter
-from state import state
+import state as state_module
 from constants import FAULT_TAU, CYLINDERS, FIRE_CRANK, CYCLE_DEG, TAU_EGT, TAU_CHT, CHT_WARMUP_T, BASELINE_EGT, BASELINE_CHT, MAX_OP, BASELINE_MAP, BASELINE_FF
 from physics.isa import calculate_isa
 from physics.expected import calculate_expected, calculate_expected_map, calculate_expected_oil_pressure, calculate_expected_fuel_flow, CYL_TRIM_EGT, CYL_TRIM_CHT
@@ -26,6 +26,7 @@ def check_confidence(altitude: float, throttle: float) -> str:
 
 @router.get("/api/telemetry")
 def get_telemetry(altitude: float = 10000, throttle: float = 100.0, fault_mode: str = "normal"):
+    state = state_module.state  # always dereference through the module so reset() is visible
     now = time.monotonic()
     if state.last_poll_s is None:
         state.last_poll_s = now
