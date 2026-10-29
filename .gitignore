@@ -2,7 +2,9 @@
 
 # dependencies
 /node_modules
-/uav-backend/__pycache__
+__pycache__/
+*.py[cod]
+*~
 /.pnp
 .pnp.*
 .yarn/*
@@ -44,3 +46,4 @@ next-env.d.ts
 # python backend
 /uav-backend/.venv/
 /uav-backend/models/*.pkl
+.freebuff

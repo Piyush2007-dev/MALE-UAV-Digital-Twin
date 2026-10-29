@@ -19,4 +19,10 @@ def classify_fault(telemetry: dict, if_label: str) -> str:
     if kurtosis > 4.5:
         return "Bearing Wear (high vibration kurtosis)"
         
+    if egt and (sum(egt) / len(egt)) > 820.0:
+        return "Turbocharger Wear/Wastegate Jam (high average EGT, low MAP)"
+
+    if cht and (max(cht) - min(cht)) > 15.0:
+        return "Sensor Drift / Calibration Bias (high CHT channel spread)"
+        
     return "Unknown Anomaly"

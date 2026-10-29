@@ -37,7 +37,7 @@ def get_telemetry(altitude: float = 10000, throttle: float = 100.0, fault_mode: 
     fault_ease_rate = 1.0 - math.exp(-dt / FAULT_TAU)
 
     t_amb_c, density_ratio = calculate_isa(altitude)
-    expected_metrics = calculate_expected(altitude, throttle, state.sim_time_s)
+    expected_metrics = calculate_expected(state, altitude, throttle, dt)
     expected_rpm = expected_metrics["expected_rpm"]
 
     # ── Fault target deltas ────────────────────────────────────────────────
@@ -96,7 +96,7 @@ def get_telemetry(altitude: float = 10000, throttle: float = 100.0, fault_mode: 
     measured_egt[0] += state.egt_boost
     measured_cht     = [c + random.uniform(-0.3, 0.3) for c in state.cht_state]
 
-    measured_map      = calculate_expected_map(altitude, throttle) + state.map_boost + random.uniform(-0.1, 0.1)
+    measured_map      = calculate_expected_map(state, altitude, throttle) + state.map_boost + random.uniform(-0.1, 0.1)
     measured_op       = MAX_OP - state.op_drop  + random.uniform(-0.4, 0.4)
     measured_ff       = calculate_expected_fuel_flow(rpm_now, altitude, throttle) + random.uniform(-0.04, 0.04)
     measured_kurtosis = 2.9 + state.kurt_wander + state.kurt_boost + random.uniform(-0.02, 0.02)
@@ -118,7 +118,7 @@ def get_telemetry(altitude: float = 10000, throttle: float = 100.0, fault_mode: 
         "cht":        round(measured_cht[0]   - expected_metrics["expected_cht"]),
         "egt_spread": egt_spread,
         "cht_spread": cht_spread,
-        "map":        round(measured_map - calculate_expected_map(altitude, throttle),          2),
+        "map":        round(measured_map - calculate_expected_map(state, altitude, throttle),          2),
         "op":         round(measured_op  - calculate_expected_oil_pressure(rpm_now),  2),
         "ff":         round(measured_ff  - calculate_expected_fuel_flow(rpm_now, altitude, throttle), 3),
     }
@@ -205,7 +205,7 @@ def get_telemetry(altitude: float = 10000, throttle: float = 100.0, fault_mode: 
             "rpm": round(expected_metrics["expected_rpm"]),
             "egt": round(expected_metrics["expected_egt"]),
             "cht": round(expected_metrics["expected_cht"]),
-            "map": round(calculate_expected_map(altitude, throttle), 1),
+            "map": round(calculate_expected_map(state, altitude, throttle), 1),
             "op":  round(calculate_expected_oil_pressure(rpm_now), 1),
             "ff":  round(calculate_expected_fuel_flow(rpm_now, altitude, throttle), 2),
         },

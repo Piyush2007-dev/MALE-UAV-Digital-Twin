@@ -21,6 +21,12 @@ class EngineState:
 
         self.sim_time_s  = 0.0
         self.last_poll_s = None
+        
+        # Physics Integrators
+        self.expected_map_state = BASELINE_MAP
+        self.expected_cht_state = BASELINE_CHT
+        self.expected_egt_state = BASELINE_EGT
+        
         self.crank_deg   = random.uniform(0.0, CYCLE_DEG)
         self.fire_count  = [0, 0, 0, 0]
         self.egt_state   = [BASELINE_EGT for _ in range(CYLINDERS)]

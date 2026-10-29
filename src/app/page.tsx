@@ -7,13 +7,15 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { cn } from "@/lib/utils";
 import { Activity, ShieldAlert, Cpu, LayoutDashboard, BookOpen, Settings2, Moon, Sun, RotateCw } from "lucide-react";
 
-type FaultMode = "normal" | "misfire" | "cooling" | "bearing";
+type FaultMode = "normal" | "misfire" | "cooling" | "bearing" | "turbo_jam" | "sensor_drift";
 
 const FAULT_OPTIONS: { value: FaultMode; label: string; desc: string }[] = [
-  { value: "normal",  label: "Nominal Baseline",        desc: "Nominal Baseline � clear all fault injections" },
+  { value: "normal",  label: "Nominal Baseline",        desc: "Nominal Baseline  clear all fault injections" },
   { value: "misfire", label: "Cyl 1 Misfire Injection", desc: "Inject an isolated misfire on Cylinder 1" },
   { value: "cooling", label: "Thermal Degradation",     desc: "Simulate a cooling-loop failure (CHT rise)" },
   { value: "bearing", label: "Bearing Micro-Spalling",  desc: "Simulate bearing wear (kurtosis rise)" },
+  { value: "turbo_jam", label: "Turbo/Wastegate Jam",   desc: "Simulate turbo failure (MAP drop, EGT rise)" },
+  { value: "sensor_drift", label: "CHT Sensor Drift",   desc: "Simulate linear sensor drift on Cyl 1 CHT" },
 ];
 type TelemetrySample = {
   time: string;
